@@ -5,7 +5,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from telegram import Bot
 
-from . import archive, monitoring, state
+from . import archive, monitoring, sheets, state
 from .config import (
     EVENING_HOUR,
     MORNING_HOUR,
@@ -13,9 +13,23 @@ from .config import (
     TIMEZONE,
 )
 from .prompts import slot_opener
-from .time_util import LOCAL_TZ
+from .time_util import LOCAL_TZ, local_date_str
 
 log = logging.getLogger(__name__)
+
+
+async def _slot_already_logged(slot: str) -> bool:
+    """Check today's row to see if this slot has already been committed.
+    Returns False on any error so a flaky network doesn't suppress nudges."""
+    try:
+        row = await sheets.fetch_row_by_date(local_date_str())
+    except Exception:
+        log.exception("fetch_row_by_date failed during slot check; sending nudge anyway")
+        return False
+    if row is None:
+        return False
+    col = "morning_logged_at" if slot == "morning" else "evening_logged_at"
+    return bool(row.get(col, "").strip())
 
 
 def _start_slot_factory(bot: Bot, slot: str):
@@ -25,6 +39,9 @@ def _start_slot_factory(bot: Bot, slot: str):
         existing = state.load(chat_id)
         if existing is not None and not existing.is_expired():
             log.info("Skipping %s nudge: conversation already in progress.", slot)
+            return
+        if await _slot_already_logged(slot):
+            log.info("Skipping %s nudge: already logged today.", slot)
             return
         state.start(chat_id, slot)
         try:

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -126,10 +126,67 @@ def slot_opener(slot: str) -> str:
     )
 
 
+# --- Routing (intent classification) ---------------------------------------
+
+ROUTER_SYSTEM_PROMPT = f"""You are a message classifier for {BOT_NAME}, a personal health check-in bot.
+
+Classify the incoming voice note or text into exactly one intent:
+
+- "checkin": the user is logging their CURRENT day's metrics (sleep, water, mood, exercise, body, shoulder, neck, migraine, steps). This is the DEFAULT — if unsure, prefer "checkin".
+- "update": the user is correcting or amending a PREVIOUSLY logged day's data. Strong signals: phrases like "update", "fix", "correction", "actually", "I meant", combined with a past-date reference like "yesterday", "last Monday", "two days ago", or an explicit date.
+
+Output {{intent, reason}}. The reason should be ≤ 10 words explaining why."""
+
+
+class RouterResponse(BaseModel):
+    intent: Literal["checkin", "update"]
+    reason: str = Field(description="Short explanation of why this intent was chosen.")
+
+
+# --- Update flow -----------------------------------------------------------
+
+UPDATE_SYSTEM_PROMPT = f"""You are {BOT_NAME}, helping the user correct previously-logged daily metrics.
+
+The user's message will reference a past date and one or more fields to change. Your job:
+
+1. Extract the date phrase verbatim into `target_date_phrase` (e.g. "yesterday", "last Monday", "May 4", "2026-05-03"). Do NOT resolve it to a specific date — emit the phrase exactly as the user said it. Python will resolve it.
+2. Extract field values into `field_updates` using this same field schema:
+   - water_oz, sleep_hours, desk_hours, couch_bed_hours, exercise_minutes: non-negative numbers
+   - mood_score: 1–10 integer
+   - shoulder_pain: 0–10 integer
+   - migraine_severity: 0–10 integer (0 if no migraine)
+   - neck_spasms, migraine: boolean
+   - exercise_type: one of [none, strength, swim, spin, hike, run, yoga, other]
+   - body_notes: free-text one-liner
+   - steps: non-negative integer
+   Only set fields the user explicitly mentioned. Leave others null.
+3. If the date is missing, ask for it. If a field value is ambiguous ("a bit more water"), ask for the specific number.
+4. Set `done: true` only when both `target_date_phrase` and at least one `field_updates` value are non-null AND no follow-up question is needed.
+5. Reply with a short confirmation when done, e.g. "Got it — proposing to update yesterday's water_oz to 64."
+
+Today is {{today_local}}. Use this only to disambiguate the user's wording. Don't compute the target date yourself."""
+
+
+class UpdateResponse(BaseModel):
+    reply: str = Field(description="What to say to the user. <= 2 sentences.")
+    done: bool = Field(
+        description="True only when target_date_phrase and at least one field_updates value are set and no clarification is needed."
+    )
+    target_date_phrase: Optional[str] = Field(
+        default=None,
+        description="The date phrase the user said, verbatim (e.g. 'yesterday', 'May 4'). Do NOT resolve to ISO.",
+    )
+    field_updates: Fields
+
+
 # Re-export so callers don't need to know it's defined here.
 __all__ = [
     "SYSTEM_PROMPT",
+    "ROUTER_SYSTEM_PROMPT",
+    "UPDATE_SYSTEM_PROMPT",
     "CheckinResponse",
+    "RouterResponse",
+    "UpdateResponse",
     "Fields",
     "ExerciseType",
     "required_fields",

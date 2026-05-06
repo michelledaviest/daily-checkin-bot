@@ -17,3 +17,7 @@ state/
 !logs/.gitkeep
 
 .DS_Store
+
+# Personal scratch
+TODO.md
+deploy-vm.sh

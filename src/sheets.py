@@ -122,3 +122,64 @@ def _upsert_sync(local_date: str, fields: dict) -> None:
 
 async def upsert_row(local_date: str, fields: dict) -> None:
     await asyncio.to_thread(_upsert_sync, local_date, fields)
+
+
+def _fetch_all_rows_sync() -> list[dict]:
+    """Return every data row as a dict keyed by header name. All values are
+    strings (empty cells → ""). Type coercion is the caller's job."""
+    ws = _get_worksheet()
+    values = ws.get_all_values()
+    if len(values) < 2:
+        return []
+    headers = values[0]
+    out: list[dict] = []
+    for row in values[1:]:
+        padded = list(row) + [""] * (len(headers) - len(row))
+        out.append(dict(zip(headers, padded)))
+    return out
+
+
+async def fetch_all_rows() -> list[dict]:
+    return await asyncio.to_thread(_fetch_all_rows_sync)
+
+
+def _update_existing_sync(local_date: str, fields: dict) -> bool:
+    """Like _upsert_sync but never appends. Returns True if a row was found and
+    updated, False if no row exists for the given date."""
+    ws = _get_worksheet()
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            row_num = _find_row_by_date(ws, local_date)
+            if row_num is None:
+                return False
+            updates = []
+            for col_name, value in fields.items():
+                if col_name not in COLUMN_INDEX:
+                    continue
+                a1 = gspread.utils.rowcol_to_a1(row_num, COLUMN_INDEX[col_name])
+                updates.append({"range": a1, "values": [[_format_cell(value)]]})
+            if updates:
+                ws.batch_update(updates, value_input_option="USER_ENTERED")
+            return True
+        except Exception as e:
+            last_err = e
+            log.warning("sheets update failed (attempt %d): %s", attempt + 1, e)
+    _record_failure({"local_date": local_date, **fields}, str(last_err))
+    raise RuntimeError(f"sheets update failed twice: {last_err}")
+
+
+async def update_existing_row(local_date: str, fields: dict) -> bool:
+    return await asyncio.to_thread(_update_existing_sync, local_date, fields)
+
+
+def _fetch_row_by_date_sync(local_date: str) -> dict | None:
+    rows = _fetch_all_rows_sync()
+    for r in rows:
+        if r.get("local_date") == local_date:
+            return r
+    return None
+
+
+async def fetch_row_by_date(local_date: str) -> dict | None:
+    return await asyncio.to_thread(_fetch_row_by_date_sync, local_date)

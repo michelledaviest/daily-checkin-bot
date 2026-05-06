@@ -20,11 +20,15 @@ class Turn:
 @dataclass
 class ConversationState:
     chat_id: int
-    slot: str  # "morning" | "evening"
+    slot: str  # "morning" | "evening" | "update"
     started_at: str  # ISO UTC
     turns: list[Turn] = field(default_factory=list)
     partial_fields: dict = field(default_factory=dict)
     raw_transcript: str = ""
+    mode: str = "checkin"  # "checkin" | "update"
+    target_date: str | None = None  # ISO date (YYYY-MM-DD) for update mode
+    awaiting_confirmation: bool = False
+    propose_message_id: int | None = None  # the bot message that has the Yes/No buttons
 
     def is_expired(self) -> bool:
         started = datetime.fromisoformat(self.started_at)
@@ -63,6 +67,10 @@ def load(chat_id: int) -> ConversationState | None:
         turns=[Turn(**t) for t in raw["turns"]],
         partial_fields=raw.get("partial_fields", {}),
         raw_transcript=raw.get("raw_transcript", ""),
+        mode=raw.get("mode", "checkin"),
+        target_date=raw.get("target_date"),
+        awaiting_confirmation=raw.get("awaiting_confirmation", False),
+        propose_message_id=raw.get("propose_message_id"),
     )
     if state.is_expired():
         clear(chat_id)
@@ -91,6 +99,19 @@ def start(chat_id: int, slot: str) -> ConversationState:
         chat_id=chat_id,
         slot=slot,
         started_at=now_utc().isoformat(timespec="seconds"),
+        mode="checkin",
+    )
+    save(state)
+    return state
+
+
+def start_update(chat_id: int) -> ConversationState:
+    clear(chat_id)
+    state = ConversationState(
+        chat_id=chat_id,
+        slot="update",
+        started_at=now_utc().isoformat(timespec="seconds"),
+        mode="update",
     )
     save(state)
     return state

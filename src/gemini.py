@@ -5,8 +5,17 @@ from google import genai
 from google.genai import types
 
 from .config import GEMINI_API_KEY, GEMINI_MODEL
-from .prompts import CheckinResponse, SYSTEM_PROMPT, required_fields
+from .prompts import (
+    CheckinResponse,
+    ROUTER_SYSTEM_PROMPT,
+    RouterResponse,
+    SYSTEM_PROMPT,
+    UPDATE_SYSTEM_PROMPT,
+    UpdateResponse,
+    required_fields,
+)
 from .state import ConversationState
+from .time_util import local_date_str
 
 log = logging.getLogger(__name__)
 
@@ -86,3 +95,76 @@ def _generate_sync(state: ConversationState) -> CheckinResponse:
 async def call(state: ConversationState) -> CheckinResponse:
     """Async wrapper around the sync SDK call so handlers don't block the event loop."""
     return await asyncio.to_thread(_generate_sync, state)
+
+
+# --- Routing (intent classification) ---------------------------------------
+
+
+def _route_sync(audio_bytes: bytes | None, text: str | None) -> RouterResponse:
+    parts: list = []
+    if audio_bytes is not None:
+        parts.append(
+            types.Part.from_bytes(data=audio_bytes, mime_type="audio/ogg")
+        )
+    if text:
+        parts.append(types.Part.from_text(text=text))
+    if not parts:
+        # Defensive fallback — caller should always supply at least one.
+        parts.append(types.Part.from_text(text=""))
+
+    contents = [types.Content(role="user", parts=parts)]
+    config = types.GenerateContentConfig(
+        system_instruction=ROUTER_SYSTEM_PROMPT,
+        response_mime_type="application/json",
+        response_schema=RouterResponse,
+        temperature=0.0,
+    )
+    resp = _client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config=config,
+    )
+    parsed = resp.parsed
+    if isinstance(parsed, RouterResponse):
+        return parsed
+    if isinstance(parsed, dict):
+        return RouterResponse.model_validate(parsed)
+    return RouterResponse.model_validate_json(resp.text)
+
+
+async def route(
+    *, audio_bytes: bytes | None = None, text: str | None = None
+) -> RouterResponse:
+    return await asyncio.to_thread(_route_sync, audio_bytes, text)
+
+
+# --- Update flow -----------------------------------------------------------
+
+
+def _update_system_instruction() -> str:
+    return UPDATE_SYSTEM_PROMPT.format(today_local=local_date_str())
+
+
+def _generate_update_sync(state: ConversationState) -> UpdateResponse:
+    contents = _build_contents(state)
+    config = types.GenerateContentConfig(
+        system_instruction=_update_system_instruction(),
+        response_mime_type="application/json",
+        response_schema=UpdateResponse,
+        temperature=0.2,
+    )
+    resp = _client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config=config,
+    )
+    parsed = resp.parsed
+    if isinstance(parsed, UpdateResponse):
+        return parsed
+    if isinstance(parsed, dict):
+        return UpdateResponse.model_validate(parsed)
+    return UpdateResponse.model_validate_json(resp.text)
+
+
+async def call_update(state: ConversationState) -> UpdateResponse:
+    return await asyncio.to_thread(_generate_update_sync, state)

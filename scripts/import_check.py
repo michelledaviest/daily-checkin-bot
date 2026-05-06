@@ -134,14 +134,22 @@ class _MessageHandler:
     def __init__(self, *a, **k): pass
 
 
+class _CallbackQueryHandler:
+    def __init__(self, *a, **k): pass
+
+
 class _Filters:
     VOICE = object()
     AUDIO = object()
+    TEXT = object()
+    COMMAND = object()
 
 
 _filters_mod = types.ModuleType("telegram.ext.filters")
 _filters_mod.VOICE = _Filters.VOICE
 _filters_mod.AUDIO = _Filters.AUDIO
+_filters_mod.TEXT = _Filters.TEXT
+_filters_mod.COMMAND = _Filters.COMMAND
 
 
 class _AppBuilder:
@@ -166,10 +174,25 @@ class _ContextTypes:
     DEFAULT_TYPE = type("CT", (), {})
 
 
-stub("telegram", Update=_Update, Bot=_Bot)
+class _InlineKeyboardButton:
+    def __init__(self, *a, **k): pass
+
+
+class _InlineKeyboardMarkup:
+    def __init__(self, *a, **k): pass
+
+
+stub(
+    "telegram",
+    Update=_Update,
+    Bot=_Bot,
+    InlineKeyboardButton=_InlineKeyboardButton,
+    InlineKeyboardMarkup=_InlineKeyboardMarkup,
+)
 stub(
     "telegram.ext",
     Application=_Application,
+    CallbackQueryHandler=_CallbackQueryHandler,
     CommandHandler=_CommandHandler,
     ContextTypes=_ContextTypes,
     MessageHandler=_MessageHandler,
@@ -202,8 +225,10 @@ except ImportError:
 
 # Now import every project module.
 from src import (  # noqa: F401
+    analytics,
     archive,
     config,
+    date_parsing,
     gemini,
     monitoring,
     prompts,
