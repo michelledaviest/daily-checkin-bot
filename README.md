@@ -1,6 +1,6 @@
 # Daily Check-in Bot
 
-A voice-based health check-in bot that nudges you on Telegram twice a day, takes a spoken (or typed) reply, asks structured follow-ups when something's missing, and logs the results to a Google Sheet. Built to run as a `systemd` service on a Google Compute Engine `e2-micro` free-tier VM at **$0/month**.
+Host your own accountability buddy as a voice-based check-in bot on Telegram! The bot nudges you on Telegram twice a day, takes a spoken (or typed) reply, asks structured follow-ups when something's missing, and logs the results to a Google Sheet. Built to run as a `systemd` service on a Google Compute Engine `e2-micro` free-tier VM at **$0/month**. All the data is saved in a Google Sheet on your account. Feel free to fork and customize with your own metrics or setup! All the setup instructions are in the README to get this version up and running.
 
 You name the bot in your `.env` (default suggestion: a friendly first name like "June"). Conversations look like this:
 
