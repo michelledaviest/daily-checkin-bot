@@ -12,7 +12,7 @@ from telegram.ext import (
     filters,
 )
 
-from . import analytics, archive, date_parsing, gemini, sheets, state
+from . import analytics, archive, date_parsing, gemini, hydration, sheets, state
 from .config import MAX_TURNS, TELEGRAM_ALLOWED_CHAT_ID
 from .prompts import CheckinResponse, UpdateResponse, required_fields, slot_opener
 from .time_util import iso_utc, local_date_str, now_local, now_utc
@@ -389,6 +389,12 @@ async def cmd_log(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id, "Sheet write failed — try again in a moment."
         )
         return
+
+    if field == "water_oz":
+        try:
+            hydration.set_last_log_now()
+        except Exception:
+            log.exception("set_last_log_now failed; ignoring")
 
     # Build reply.
     label, unit = next(

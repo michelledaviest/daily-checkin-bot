@@ -3,6 +3,12 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 
 from . import sheets
+from .config import (
+    EXERCISE_WEEKLY_GOAL_MIN,
+    SLEEP_GOAL_HOURS,
+    STEPS_GOAL,
+    WATER_GOAL_OZ,
+)
 from .time_util import now_local
 
 WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -140,11 +146,9 @@ async def migraine_summary() -> str:
 
 # --- Streak / habit nudges -------------------------------------------------
 
-# Habit thresholds — tweak in one place.
-WATER_GOAL_OZ = 60.0
-SLEEP_GOAL_HOURS = 7.0
-STEPS_GOAL = 10000
-EXERCISE_WEEKLY_GOAL_MIN = 150.0
+# Habit thresholds — all four (water/sleep/steps/exercise) are overridable in
+# config.py via env vars: WATER_GOAL_OZ, SLEEP_GOAL_HOURS, STEPS_GOAL,
+# EXERCISE_WEEKLY_GOAL_MIN.
 
 # When to start announcing things.
 POSITIVE_STREAK_MIN = 3   # show positive streak when this long or longer

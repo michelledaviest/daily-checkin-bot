@@ -5,9 +5,10 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from telegram import Bot
 
-from . import archive, monitoring, sheets, state
+from . import archive, hydration, monitoring, sheets, state
 from .config import (
     EVENING_HOUR,
+    HYDRATION_NUDGE_HOURS,
     MORNING_HOUR,
     TELEGRAM_ALLOWED_CHAT_ID,
     TIMEZONE,
@@ -52,6 +53,23 @@ def _start_slot_factory(bot: Bot, slot: str):
     return _start_slot
 
 
+def _hydration_nudge_factory(bot: Bot):
+    async def _nudge() -> None:
+        try:
+            msg = await hydration.maybe_compose_nudge()
+        except Exception:
+            log.exception("hydration.maybe_compose_nudge raised")
+            return
+        if msg is None:
+            return
+        try:
+            await bot.send_message(TELEGRAM_ALLOWED_CHAT_ID, msg)
+        except Exception:
+            log.exception("Failed to send hydration nudge")
+
+    return _nudge
+
+
 async def _heartbeat_job() -> None:
     monitoring.heartbeat(success=True)
 
@@ -78,6 +96,14 @@ def build(bot: Bot) -> AsyncIOScheduler:
         id="evening_nudge",
         replace_existing=True,
     )
+    for hour in HYDRATION_NUDGE_HOURS:
+        scheduler.add_job(
+            _hydration_nudge_factory(bot),
+            CronTrigger(hour=hour, minute=0, timezone=LOCAL_TZ),
+            id=f"hydration_nudge_{hour}",
+            replace_existing=True,
+        )
+
     scheduler.add_job(
         _heartbeat_job,
         IntervalTrigger(minutes=30),

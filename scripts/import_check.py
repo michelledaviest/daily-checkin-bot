@@ -230,6 +230,7 @@ from src import (  # noqa: F401
     config,
     date_parsing,
     gemini,
+    hydration,
     monitoring,
     prompts,
     scheduler,

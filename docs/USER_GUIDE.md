@@ -32,16 +32,22 @@ You'll get two nudges a day, at whatever times you set up (defaults: 9 AM and 7 
 >
 > **Bot:** logged ✓ 50 oz, mood 7, shoulder 3, no migraine, 45m spin, 8000 steps
 
-## Streak nudges (Habit building!)
+## Nudges
+
+Nudges are short, unprompted messages the bot sends you outside the structured check-in flow — celebrations, reminders, gentle warnings. There are two kinds today: **streak nudges** that appear at the end of the evening check-in, and **hydration nudges** that fire at fixed times during the day.
+
+The four habit goals (water, sleep, steps, exercise) are configurable via env vars (`WATER_GOAL_OZ`, `SLEEP_GOAL_HOURS`, `STEPS_GOAL`, `EXERCISE_WEEKLY_GOAL_MIN`). Defaults are listed below; set your own in `.env` and restart the service to pick them up.
+
+### Streak nudges (Habit building!)
 
 When you finish your evening check-in, the bot tacks on a few short lines based on how you've been doing with habits that you want to build — celebrations when you're on a roll, gentle pokes when you're not.
 
 These are the habits I have programmed in there. You can edit this list or include your own metrics/habits that you want to track.
 
-- **💧 Hydration** — drinking 60+ oz a day counts as a streak when you string consecutive days together.
-- **😴 Sleep** — getting 7+ hours a night.
-- **👟 Steps** — hitting 10,000 steps.
-- **🏃 Exercise** — 150 minutes a week, total. Tracked over a rolling 7-day window so a couple of rest days won't mess things up. The bot tells you each evening how much you've moved and how many movement minutes you have left to hit the WHO guideline.
+- **💧 Hydration** — drinking enough water (default 60oz/day) counts as a streak when you string consecutive days together.
+- **😴 Sleep** — getting enough hours (default 7+) a night.
+- **👟 Steps** — hitting your daily target (default 10,000 steps).
+- **🏃 Exercise** — your weekly minutes goal (default 150). Tracked over a rolling 7-day window so a couple of rest days won't mess things up. The bot tells you each evening how much you've moved and how many movement minutes you have left.
 
 A streak gets announced once it's three days long. If you're under-goal two days in a row, you'll get a soft nudge ("2nd day under 60oz — bump it tomorrow?"). The bot caps things at three lines so it doesn't get overwhelming, and a special **🌟 Perfect day** line tops the message when water, sleep, and steps all hit on the same day.
 
@@ -70,6 +76,28 @@ logged ✓ 40 oz, mood 5, shoulder 6, no migraine, 0m exercise, 6000 steps
 💧 2nd day under 60oz — bump it tomorrow?
 🏃 No exercise in the last 7 days — gentle nudge
 ```
+
+### Hydration nudges
+
+A few times during the day the bot pings you to drink water and log it — a short, unscheduled message rather than a check-in. By default these fire at **11 AM, 2 PM, and 5 PM ET** (configurable via `HYDRATION_NUDGE_HOURS`).
+
+Each nudge tells you where you are toward your daily target, with a prompt to count what you drink:
+
+```
+💧 Water break — 32oz logged so far. Drink up, then `/log water N` to count it.
+```
+
+Or if you haven't logged anything yet:
+
+```
+💧 Water break — nothing logged yet. Drink up, then `/log water N` to count it.
+```
+
+The bot stays quiet when it would be redundant:
+- If you used `/log water` in the last 2 hours (so it doesn't pile up right after you've logged).
+- If you've already hit your daily goal.
+
+Tweak the schedule in `.env` (e.g. `HYDRATION_NUDGE_HOURS=10,13,16,19` for four nudges, or set it to an empty string to turn them off entirely). Restart the bot to pick up the change.
 
 ## Mid-day commands
 
