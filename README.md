@@ -2,7 +2,11 @@
 
 A voice-based health check-in bot that nudges you on Telegram twice a day, takes a spoken (or typed) reply, asks structured follow-ups when something's missing, and logs the results to a Google Sheet. Built to run as a `systemd` service on a Google Compute Engine `e2-micro` free-tier VM at **$0/month**.
 
-You name the bot in your `.env` (default suggestion: a friendly first name like "June"). Conversations look like this:
+You name the bot in your `.env` (default suggestion: a friendly first name like "June"). One row per day in the sheet — morning fills `sleep_hours`; evening fills the rest. Update past days via voice. Quick-log single numbers with `/log`. Pull analytics on demand with commands like `/migraine`.
+
+**This README covers deployment.** For everyday use of the bot — commands, examples, the update flow, analytics — see **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**.
+
+A typical day looks like this:
 
 > **Bot (9 AM):** ☀️ Good morning! Reminders for today: drink water, work from your desk, no couch. Send a voice note with how many hours you slept.
 >
@@ -20,8 +24,6 @@ You name the bot in your `.env` (default suggestion: a friendly first name like 
 > **You:** *"Body feels fine, slightly stiff in the upper back"*
 >
 > **Bot:** logged ✓ 50 oz, mood 7, shoulder 3, no migraine, 45m spin, 8000 steps
-
-One row per day in the sheet. Morning fills `sleep_hours`; evening fills the rest.
 
 ## What it tracks (default schema)
 
@@ -204,16 +206,6 @@ sudo systemctl status checkin-bot
 ```
 
 If the status shows `active (running)`, you're done. Logs via `journalctl -u checkin-bot -f`.
-
-## Usage
-
-In Telegram:
-- `/start` — intro
-- `/now morning` or `/now evening` — manually start a check-in
-- `/cancel` — abort current check-in
-- `/status` — see what's mid-flight
-
-Reply with voice notes or typed text — the Gemini call accepts both. Mix freely (voice the long answer, type the quick correction).
 
 ## Customization points
 
