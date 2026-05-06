@@ -1,0 +1,1 @@
+local_date	morning_logged_at	evening_logged_at	sleep_hours	water_oz	mood_score	body_notes	desk_hours	couch_bed_hours	shoulder_pain	neck_spasms	migraine	migraine_severity	exercise_type	exercise_minutes	steps	morning_transcript	evening_transcript	morning_turns	evening_turns

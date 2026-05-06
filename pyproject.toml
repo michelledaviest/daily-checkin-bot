@@ -1,0 +1,23 @@
+[project]
+name = "checkin-bot"
+version = "0.1.0"
+description = "Voice-based health check-in bot: Telegram + Gemini + Google Sheets"
+requires-python = ">=3.10"
+dependencies = [
+    "python-telegram-bot>=21.6",
+    "apscheduler>=3.10",
+    "google-genai>=0.8",
+    "gspread>=6.0",
+    "google-auth>=2.30",
+    "requests>=2.32",
+    "python-dotenv>=1.0",
+    "tzdata>=2024.1",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
