@@ -1,22 +1,23 @@
 # User Guide
 
-How to use your check-in bot once it's deployed. For setup/deployment instructions, see the [README](../README.md).
+Everything you need to know about chatting with your check-in bot. For getting it set up in the first place, see the [README](../README.md).
 
-## Replies — voice or text
+## Talk to it however you want
 
-Reply to the bot with **voice notes or typed text** — Gemini accepts both. Mix freely (voice the long answer, type a quick correction).
+Voice notes work. Typed messages work. The bot uses AI to pull structured data out of either, so just talk like you would to a friend.
 
-## Daily check-ins
+## The daily rhythm
 
-The morning nudge fires at `MORNING_HOUR` and asks for sleep + sends lifestyle reminders. The evening nudge fires at `EVENING_HOUR` and walks you through the rest of the day's metrics. If you forget any required fields, the bot replies with a single bulleted list of what's still missing rather than asking one question at a time.
+You'll get two nudges a day, at whatever times you set up (defaults: 9 AM and 7 PM):
 
-The scheduler skips the nudge if you've already logged that slot for the day (e.g. via `/log` or an early `/now evening`).
+- **Morning** is a light checkin. Just lifestyle reminders for the habits you are trying to build ("drink water, sit at your desk") and one ask: how many hours did you sleep?
+- **Evening** is the detailed check-in. The bot asks for data on the metrics you are trying to track. Mine are water, mood, body notes, shoulder pain, neck spasms, migraine status, exercise, steps, and where I spent my day (desk vs. couch/bed). You can answer everything in one voice note — if you forget anything, the bot replies once with a short list of what's still missing so that you can update it.
 
-### Example conversation
+### What a typical day sounds like
 
 > **Bot (9 AM):** ☀️ Good morning! Reminders for today: drink water, work from your desk, no couch. Send a voice note with how many hours you slept.
 >
-> **You:** *"7 and a half hours"*
+> **You:** *"Hi June! Good morning. I slept 7 and a half hours last night."*
 >
 > **Bot:** logged ✓ slept 7.5h
 >
@@ -31,9 +32,50 @@ The scheduler skips the nudge if you've already logged that slot for the day (e.
 >
 > **Bot:** logged ✓ 50 oz, mood 7, shoulder 3, no migraine, 45m spin, 8000 steps
 
-## `/today` — show today's row
+## Streak nudges (Habit building!)
 
-Shows what's been logged so far and what's still missing. Useful mid-day to remember whether you've already answered something.
+When you finish your evening check-in, the bot tacks on a few short lines based on how you've been doing with habits that you want to build — celebrations when you're on a roll, gentle pokes when you're not.
+
+These are the habits I have programmed in there. You can edit this list or include your own metrics/habits that you want to track.
+
+- **💧 Hydration** — drinking 60+ oz a day counts as a streak when you string consecutive days together.
+- **😴 Sleep** — getting 7+ hours a night.
+- **👟 Steps** — hitting 10,000 steps.
+- **🏃 Exercise** — 150 minutes a week, total. Tracked over a rolling 7-day window so a couple of rest days won't mess things up. The bot tells you each evening how much you've moved and how many movement minutes you have left to hit the WHO guideline.
+
+A streak gets announced once it's three days long. If you're under-goal two days in a row, you'll get a soft nudge ("2nd day under 60oz — bump it tomorrow?"). The bot caps things at three lines so it doesn't get overwhelming, and a special **🌟 Perfect day** line tops the message when water, sleep, and steps all hit on the same day.
+
+A few examples of what your evening confirmation might look like:
+
+```
+logged ✓ 60 oz, mood 7, shoulder 3, no migraine, 45m spin, 11000 steps
+
+💧 5-day streak hitting 60oz water
+👟 3 days in a row 10k+ steps
+🏃 180 min this week ✓ goal hit
+```
+
+```
+logged ✓ 65 oz, mood 8, shoulder 2, no migraine, 30m yoga, 12000 steps
+
+🌟 Perfect day — every habit hit
+💧 7-day streak hitting 60oz water
+🪑 8h at desk today, up from 6h avg 📈
+👟 4-day streak 10k+ steps
+```
+
+```
+logged ✓ 40 oz, mood 5, shoulder 6, no migraine, 0m exercise, 6000 steps
+
+💧 2nd day under 60oz — bump it tomorrow?
+🏃 No exercise in the last 7 days — gentle nudge
+```
+
+## Mid-day commands
+
+### `/today` — what have I logged so far?
+
+Useful when you're halfway through the day and can't remember whether you already told the bot about your sleep. Shows a quick rundown of what's filled in and what's still blank.
 
 ```
 📅 Today (2026-05-06)
@@ -47,9 +89,9 @@ Missing: body, desk, couch/bed, shoulder, neck spasms,
 migraine, severity, exercise, exercise min, steps
 ```
 
-## `/log <field> <value>` — quick-log a single number
+### `/log <field> <value>` — log one thing fast
 
-Skip the conversational flow when you want to log one thing fast.
+When you just want to drop a number without holding a conversation. Great for incremental things like water — call it three times across the day and the totals add up.
 
 ```
 /log water 32      → +32oz water → 32oz today.
@@ -65,36 +107,37 @@ Skip the conversational flow when you want to log one thing fast.
 /log steps 8400    → +8400 steps → 8400 today.
 ```
 
-**Cumulative fields are additive** (`water_oz`, `steps`, `desk_hours`, `couch_bed_hours`, `exercise_minutes`) — call `/log water N` repeatedly through the day and it accumulates. Everything else replaces. `/log migraine no` also zeroes `migraine_severity`.
+A few things to know:
 
-**Aliases supported:** `water`, `mood`, `sleep`, `desk`, `couch`, `shoulder`, `neck`, `migraine`, `severity`, `exercise`, `minutes`, `steps`, `notes`/`body`. Or use the canonical column names.
+- **Cumulative things add up:** water, steps, desk hours, couch/bed hours, exercise minutes. So you can `/log water 32` at lunch and `/log water 16` at dinner, and the bot keeps a running total for the day.
+- **Everything else replaces** the previous value (mood, sleep, pain ratings, etc.) — there's only one current answer to those.
+- **`/log migraine no` resets severity to 0** so you don't have to remember a second command.
+- **You can use shorthand:** `water`, `mood`, `sleep`, `desk`, `couch`, `shoulder`, `neck`, `migraine`, `severity`, `exercise`, `minutes`, `steps`, `notes`/`body`. The full names work too.
 
-## Update a past day's row
+### Fix something you logged earlier
 
-Send a normal voice note or text that names the date and the change:
+You don't need a special command for this. Just send a normal message that mentions the day and what changed:
 
 > *"Hi June, update yesterday's water — I drank 64oz, not 45oz."*
 
-The bot detects this as an update (rather than a new check-in), parses the date and the field changes, then replies with a confirmation message and **inline `Yes ✓` / `No ✗` buttons**:
+The bot recognizes that as an edit (rather than a new check-in), figures out the date and the change, and replies with a confirmation card and **`Yes ✓` / `No ✗` buttons**:
 
 > Confirm: update 2026-05-05 — water_oz 45 → 64?
 
-Tap **Yes** to apply or **No** to cancel and start over.
+Tap **Yes** to apply, or **No** to bail and try again.
 
-- **Multi-field** updates work: *"update yesterday's shoulder pain to 6 and water to 50."*
-- **Absolute dates** work: *"update May 4..."*
-- **Weekday phrases** work: *"update last Tuesday..."* (resolves to the most recent past Tuesday)
-- If the day has no row yet, the bot says *"no row exists for X, can't update"* instead of silently creating one.
-- Each applied update prepends an audit line like `[updated 2026-05-06: water_oz 45→64]` to the day's transcript column so you have a paper trail.
+A few flavors that all work:
 
-## `/migraine` — analytics summary
+- **Multiple things at once:** *"update yesterday's shoulder pain to 6 and water to 50"*
+- **Specific dates:** *"update May 4..."*
+- **Weekday phrases:** *"update last Tuesday..."* (the bot picks the most recent past Tuesday)
+- If the day you mention has no row yet, the bot tells you instead of silently making one up.
 
-Pulls all rows and reports:
+Each edit also drops a little audit line into that day's transcript — `[updated 2026-05-06: water_oz 45→64]` — so you can see what changed when, if you ever look back at the sheet.
 
-- migraine count over the **last 30 and 90 days**, with average severity (when severity > 0)
-- **longest no-migraine streak** ever logged, with the date range
-- **current streak** of consecutive days without a migraine
-- **day-of-week breakdown** over the last 90 days — useful for spotting whether migraines cluster on specific days
+### `/migraine` — quick analytics
+
+Pulls every row and gives you a one-shot summary: how many migraines in the last 30 and 90 days, average severity when you've been logging it, your longest streak without one, your current streak, and a day-of-the-week breakdown for spotting patterns.
 
 ```
 🧠 Migraine summary
@@ -109,9 +152,9 @@ Day-of-week (last 90d):
 Mon: 1 | Tue: 0 | Wed: 3 | Thu: 1 | Fri: 4 | Sat: 1 | Sun: 1
 ```
 
-## Other commands
+## A few smaller commands
 
-- `/start` — intro + command list
-- `/now morning` or `/now evening` — manually start a check-in (e.g. if you missed the scheduled nudge)
-- `/cancel` — abort an in-progress conversation
-- `/status` — see what's mid-flight or whether today's archive has entries
+- `/start` — quick intro and the list of available commands
+- `/now morning` or `/now evening` — kick off a check-in right now (e.g. if you missed the scheduled nudge or want to log early)
+- `/cancel` — bail out of an in-progress conversation
+- `/status` — peek at what's in flight or whether today's archive has anything yet

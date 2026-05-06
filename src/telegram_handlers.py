@@ -798,7 +798,18 @@ async def _commit(
 
         monitoring.heartbeat(success=True)
         summary = _summary_line(s.slot, fields)
-        await context.bot.send_message(chat_id, f"logged ✓ {summary}")
+        message = f"logged ✓ {summary}"
+
+        if s.slot == "evening":
+            try:
+                streak_lines = await analytics.streak_summary()
+            except Exception:
+                log.exception("streak_summary failed; sending bare confirmation")
+                streak_lines = []
+            if streak_lines:
+                message = message + "\n\n" + "\n".join(streak_lines)
+
+        await context.bot.send_message(chat_id, message)
     except Exception:
         log.exception("sheets commit failed")
         await context.bot.send_message(
