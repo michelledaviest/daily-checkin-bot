@@ -32,7 +32,8 @@ FIELD_SLOT_OWNER = {
     "mood_score": "evening",
     "body_notes": "evening",
     "desk_hours": "evening",
-    "couch_bed_hours": "evening",
+    "skipped_meals": "evening",
+    "alcohol": "evening",
     "shoulder_pain": "evening",
     "neck_spasms": "evening",
     "migraine": "evening",
@@ -54,8 +55,6 @@ LOG_FIELD_ALIASES = {
     "mood": "mood_score", "mood_score": "mood_score",
     "sleep": "sleep_hours", "sleep_hours": "sleep_hours",
     "desk": "desk_hours", "desk_hours": "desk_hours",
-    "couch": "couch_bed_hours", "couch_bed": "couch_bed_hours",
-    "couch_bed_hours": "couch_bed_hours", "bed": "couch_bed_hours",
     "shoulder": "shoulder_pain", "shoulder_pain": "shoulder_pain",
     "neck": "neck_spasms", "neck_spasms": "neck_spasms",
     "migraine": "migraine",
@@ -64,6 +63,8 @@ LOG_FIELD_ALIASES = {
     "minutes": "exercise_minutes", "exercise_minutes": "exercise_minutes",
     "steps": "steps",
     "notes": "body_notes", "body": "body_notes", "body_notes": "body_notes",
+    "meals": "skipped_meals", "skipped_meals": "skipped_meals",
+    "alcohol": "alcohol",
 }
 
 # How to parse a value for each field.
@@ -72,7 +73,6 @@ LOG_FIELD_TYPES = {
     "mood_score": "int",
     "sleep_hours": "float",
     "desk_hours": "float",
-    "couch_bed_hours": "float",
     "shoulder_pain": "int",
     "neck_spasms": "bool",
     "migraine": "bool",
@@ -81,11 +81,13 @@ LOG_FIELD_TYPES = {
     "exercise_minutes": "float",
     "steps": "int",
     "body_notes": "string",
+    "skipped_meals": "bool",
+    "alcohol": "float",
 }
 
 # Cumulative fields are added to whatever is already in the row; the rest replace.
 ADDITIVE_FIELDS = {
-    "water_oz", "steps", "desk_hours", "couch_bed_hours", "exercise_minutes",
+    "water_oz", "steps", "desk_hours", "exercise_minutes", "alcohol",
 }
 
 
@@ -108,7 +110,6 @@ def _slot_fields(s: state.ConversationState) -> dict:
             "morning_logged_at": iso_utc(),
             "sleep_hours": f.get("sleep_hours"),
             "morning_transcript": s.raw_transcript,
-            "morning_turns": s.turn_count(),
         }
     return {
         "evening_logged_at": iso_utc(),
@@ -116,7 +117,6 @@ def _slot_fields(s: state.ConversationState) -> dict:
         "mood_score": f.get("mood_score"),
         "body_notes": f.get("body_notes"),
         "desk_hours": f.get("desk_hours"),
-        "couch_bed_hours": f.get("couch_bed_hours"),
         "shoulder_pain": f.get("shoulder_pain"),
         "neck_spasms": f.get("neck_spasms"),
         "migraine": f.get("migraine"),
@@ -124,8 +124,9 @@ def _slot_fields(s: state.ConversationState) -> dict:
         "exercise_type": f.get("exercise_type"),
         "exercise_minutes": f.get("exercise_minutes"),
         "steps": f.get("steps"),
+        "skipped_meals": f.get("skipped_meals"),
+        "alcohol": f.get("alcohol"),
         "evening_transcript": s.raw_transcript,
-        "evening_turns": s.turn_count(),
     }
 
 
@@ -210,7 +211,6 @@ _TODAY_DISPLAY_ORDER = [
     ("mood_score", "mood", ""),
     ("body_notes", "body", ""),
     ("desk_hours", "desk", "h"),
-    ("couch_bed_hours", "couch/bed", "h"),
     ("shoulder_pain", "shoulder", ""),
     ("neck_spasms", "neck spasms", ""),
     ("migraine", "migraine", ""),
@@ -218,6 +218,8 @@ _TODAY_DISPLAY_ORDER = [
     ("exercise_type", "exercise", ""),
     ("exercise_minutes", "exercise min", ""),
     ("steps", "steps", ""),
+    ("skipped_meals", "skipped meals", ""),
+    ("alcohol", "alcohol", " units"),
 ]
 
 

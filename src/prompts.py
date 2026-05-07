@@ -9,7 +9,7 @@ SYSTEM_PROMPT = f"""You are {BOT_NAME}, an attentive, warm health check-in buddy
 
 Slots (different rules):
 - morning: ONLY sleep_hours is required. The opener also includes lifestyle reminders. Just confirm sleep and acknowledge.
-- evening: the full check-in (water, mood, body, desk, couch/bed, shoulder, neck, migraine, exercise, steps — everything except sleep).
+- evening: the full check-in (water, mood, body, desk, shoulder, neck, migraine, exercise, steps, skipped meals, alcohol — everything except sleep).
 
 Rules:
 - After a voice note, examine ALL required fields for the current slot. If any are missing or unclear, respond with ONE message that lists EVERY missing/ambiguous field as a short bulleted list. Don't drip-feed one question at a time.
@@ -30,7 +30,6 @@ Field guidance:
 - body_notes: a one-sentence summary of how the body feels (stiffness, fatigue, energy, anything notable).
 - sleep_hours: hours of sleep last night. Decimal allowed.
 - desk_hours: hours worked at a proper desk setup.
-- couch_bed_hours: hours worked from couch or bed.
 - shoulder_pain: 0 (none) to 10 (worst).
 - neck_spasms: true if any spasms today, else false.
 - migraine: true if any migraine today, else false.
@@ -38,6 +37,8 @@ Field guidance:
 - exercise_type: one of [none, strength, swim, spin, hike, run, yoga, other].
 - exercise_minutes: 0 if exercise_type is none, otherwise total minutes.
 - steps: total step count for the day (integer). Ask for a rough number if the user is vague.
+- skipped_meals: true if any meal was skipped today, else false. A top migraine trigger.
+- alcohol: number of standard drink units consumed today (0 if none). One decimal allowed.
 
 When the user's answer is vague (e.g. "some water"), ask for a number. When they say "a lot" or "a little" for hours, ask for a rough number.
 
@@ -63,7 +64,6 @@ class Fields(BaseModel):
     body_notes: Optional[str] = None
     sleep_hours: Optional[float] = None
     desk_hours: Optional[float] = None
-    couch_bed_hours: Optional[float] = None
     shoulder_pain: Optional[int] = None
     neck_spasms: Optional[bool] = None
     migraine: Optional[bool] = None
@@ -71,6 +71,8 @@ class Fields(BaseModel):
     exercise_type: Optional[ExerciseType] = None
     exercise_minutes: Optional[float] = None
     steps: Optional[int] = None
+    skipped_meals: Optional[bool] = None
+    alcohol: Optional[float] = None
     raw_transcript_delta: str = Field(
         default="",
         description="Faithful transcript of the user's words from THIS turn only.",
@@ -95,7 +97,6 @@ REQUIRED_FIELDS_EVENING = [
     "mood_score",
     "body_notes",
     "desk_hours",
-    "couch_bed_hours",
     "shoulder_pain",
     "neck_spasms",
     "migraine",
@@ -103,6 +104,8 @@ REQUIRED_FIELDS_EVENING = [
     "exercise_type",
     "exercise_minutes",
     "steps",
+    "skipped_meals",
+    "alcohol",
 ]
 
 
@@ -122,7 +125,8 @@ def slot_opener(slot: str) -> str:
         )
     return (
         "🌙 Evening check-in. Send a voice note covering: water, mood, body, "
-        "shoulder pain, neck spasms, migraine, exercise, steps, and desk vs. couch/bed hours."
+        "shoulder pain, neck spasms, migraine, exercise, steps, desk hours, "
+        "any skipped meals, and alcohol."
     )
 
 
@@ -151,11 +155,11 @@ The user's message will reference a past date and one or more fields to change. 
 
 1. Extract the date phrase verbatim into `target_date_phrase` (e.g. "yesterday", "last Monday", "May 4", "2026-05-03"). Do NOT resolve it to a specific date — emit the phrase exactly as the user said it. Python will resolve it.
 2. Extract field values into `field_updates` using this same field schema:
-   - water_oz, sleep_hours, desk_hours, couch_bed_hours, exercise_minutes: non-negative numbers
+   - water_oz, sleep_hours, desk_hours, exercise_minutes, alcohol: non-negative numbers
    - mood_score: 1–10 integer
    - shoulder_pain: 0–10 integer
    - migraine_severity: 0–10 integer (0 if no migraine)
-   - neck_spasms, migraine: boolean
+   - neck_spasms, migraine, skipped_meals: boolean
    - exercise_type: one of [none, strength, swim, spin, hike, run, yoga, other]
    - body_notes: free-text one-liner
    - steps: non-negative integer

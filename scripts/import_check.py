@@ -238,6 +238,7 @@ from src import (  # noqa: F401
     state,
     telegram_handlers,
     time_util,
+    weather,
 )
 import src.main  # noqa: F401
 

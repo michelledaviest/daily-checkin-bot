@@ -5,7 +5,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from telegram import Bot
 
-from . import archive, hydration, monitoring, sheets, state
+from . import archive, hydration, monitoring, sheets, state, weather
 from .config import (
     EVENING_HOUR,
     HYDRATION_NUDGE_HOURS,
@@ -70,6 +70,10 @@ def _hydration_nudge_factory(bot: Bot):
     return _nudge
 
 
+async def _weather_job() -> None:
+    await weather.fetch_and_write(local_date_str())
+
+
 async def _heartbeat_job() -> None:
     monitoring.heartbeat(success=True)
 
@@ -88,6 +92,12 @@ def build(bot: Bot) -> AsyncIOScheduler:
         _start_slot_factory(bot, "morning"),
         CronTrigger(hour=MORNING_HOUR, minute=0, timezone=LOCAL_TZ),
         id="morning_nudge",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _weather_job,
+        CronTrigger(hour=MORNING_HOUR, minute=0, timezone=LOCAL_TZ),
+        id="weather_fetch",
         replace_existing=True,
     )
     scheduler.add_job(

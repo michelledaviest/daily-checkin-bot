@@ -1,1 +1,14 @@
-local_date	morning_logged_at	evening_logged_at	sleep_hours	water_oz	mood_score	body_notes	desk_hours	couch_bed_hours	shoulder_pain	neck_spasms	migraine	migraine_severity	exercise_type	exercise_minutes	steps	morning_transcript	evening_transcript	morning_turns	evening_turns
+# Tab: checkins  (human-logged via the bot)
+local_date	morning_logged_at	evening_logged_at	sleep_hours	water_oz	mood_score	body_notes	desk_hours	shoulder_pain	neck_spasms	migraine	migraine_severity	exercise_type	exercise_minutes	steps	skipped_meals	alcohol	morning_transcript	evening_transcript
+
+# Tab: screen_time  (auto-logged by screen_logger.py / ActivityWatch)
+local_date	laptop_screen_hours	phone_screen_hours	laptop_longest_focus_block_min	phone_longest_focus_block_min	laptop_breaks_count	phone_breaks_count
+
+# Tab: environment  (auto-pulled by weather.py / future Garmin + Google Fit)
+local_date	barometric_pressure_mb	pressure_drop_24h_mb
+
+# Tab: migraine_episodes  (future — per-episode detail, multiple rows per day)
+timestamp	local_date	severity	sleep_night_before	screen_heavy_day	caffeine_amount	hormonal	eye_strain	notes
+
+# Tab: weekly_reflections  (future — Sunday digest)
+# Tab: monthly_reflections  (future — 1st of month)

@@ -30,6 +30,7 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GSA_KEY_PATH = _required("GSA_KEY_PATH")
 SHEET_ID = _required("SHEET_ID")
 SHEET_TAB = os.environ.get("SHEET_TAB", "checkins")
+ENVIRONMENT_TAB = os.environ.get("ENVIRONMENT_TAB", "environment")
 
 HC_HEARTBEAT_URL = os.environ.get("HC_HEARTBEAT_URL", "")
 HC_DAILY_URL = os.environ.get("HC_DAILY_URL", "")
@@ -51,6 +52,11 @@ WATER_GOAL_OZ = _float("WATER_GOAL_OZ", 60.0)
 SLEEP_GOAL_HOURS = _float("SLEEP_GOAL_HOURS", 7.0)
 STEPS_GOAL = _int("STEPS_GOAL", 10000)
 EXERCISE_WEEKLY_GOAL_MIN = _float("EXERCISE_WEEKLY_GOAL_MIN", 150.0)
+
+LATITUDE = _float("LATITUDE", 42.36)
+LONGITUDE = _float("LONGITUDE", -71.06)
+
+TRACK_SCREEN_TIME = os.environ.get("TRACK_SCREEN_TIME", "false").lower() in ("1", "true", "yes")
 
 STATE_DIR = Path(os.environ.get("STATE_DIR", "./state")).resolve()
 LOGS_DIR = Path(os.environ.get("LOGS_DIR", "./logs")).resolve()

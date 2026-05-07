@@ -11,19 +11,19 @@ Voice notes work. Typed messages work. The bot uses AI to pull structured data o
 You'll get two nudges a day, at whatever times you set up (defaults: 9 AM and 7 PM):
 
 - **Morning** is a light checkin. Just lifestyle reminders for the habits you are trying to build ("drink water, sit at your desk") and one ask: how many hours did you sleep?
-- **Evening** is the detailed check-in. The bot asks for data on the metrics you are trying to track. Mine are water, mood, body notes, shoulder pain, neck spasms, migraine status, exercise, steps, and where I spent my day (desk vs. couch/bed). You can answer everything in one voice note — if you forget anything, the bot replies once with a short list of what's still missing so that you can update it.
+- **Evening** is the detailed check-in. The bot asks for water, mood, body notes, shoulder pain, neck spasms, migraine status, exercise, steps, desk hours, any skipped meals, and alcohol. You can answer everything in one voice note — if you forget anything, the bot replies once with a short list of what's still missing so that you can update it.
 
 ### What a typical day sounds like
 
 > **Bot (9 AM):** ☀️ Good morning! Reminders for today: drink water, work from your desk, no couch. Send a voice note with how many hours you slept.
 >
-> **You:** *"Hi June! Good morning. I slept 7 and a half hours last night."*
+> **You:** *"Hi! Good morning. I slept 7 and a half hours last night."*
 >
 > **Bot:** logged ✓ slept 7.5h
 >
-> **Bot (7 PM):** 🌙 Evening check-in. Send a voice note covering: water, mood, body, shoulder pain, neck spasms, migraine, exercise, steps, and desk vs. couch/bed hours.
+> **Bot (7 PM):** 🌙 Evening check-in. Send a voice note covering: water, mood, body, shoulder pain, neck spasms, migraine, exercise, steps, desk hours, any skipped meals, and alcohol.
 >
-> **You:** *"Drank about 50 oz, mood is a 7, shoulder pain a 3, no migraine, no neck spasms, did a 45 min spin class, around 8000 steps, worked 6 hours at desk and 1 on couch."*
+> **You:** *"Drank about 50 oz, mood is a 7, shoulder pain a 3, no migraine, no neck spasms, did a 45 min spin class, around 8000 steps, 6 hours at desk, no meals skipped, no alcohol."*
 >
 > **Bot:** Got most of it. Still need:
 > • body notes (one line on how you feel)
@@ -99,6 +99,15 @@ The bot stays quiet when it would be redundant:
 
 Tweak the schedule in `.env` (e.g. `HYDRATION_NUDGE_HOURS=10,13,16,19` for four nudges, or set it to an empty string to turn them off entirely). Restart the bot to pick up the change.
 
+## What gets logged automatically
+
+A few things write to the sheet in the background without you doing anything:
+
+- **Barometric pressure** — every morning at check-in time, the bot fetches today's mean sea-level pressure and the 24-hour drop from Open-Meteo, and writes them to the `environment` tab. Useful context for migraine correlation later.
+- **Laptop screen time** *(optional — off by default)* — once you set up ActivityWatch and enable it, an hourly cron job writes active screen hours, longest focus block, and break count to the `screen_time` tab. See [Setting up laptop screen time tracking](activitywatch-setup.md) to get started, then set `TRACK_SCREEN_TIME=true` in your bot's `.env` and restart.
+
+These land in separate sheet tabs so they don't clutter the main `checkins` tab.
+
 ## Mid-day commands
 
 ### `/today` — what have I logged so far?
@@ -113,8 +122,8 @@ morning ✓
 ✓ water 32oz
 ✓ mood 7
 
-Missing: body, desk, couch/bed, shoulder, neck spasms,
-migraine, severity, exercise, exercise min, steps
+Missing: body, desk, shoulder, neck spasms, migraine,
+severity, exercise, exercise min, steps, skipped meals, alcohol
 ```
 
 ### `/log <field> <value>` — log one thing fast
@@ -133,20 +142,22 @@ When you just want to drop a number without holding a conversation. Great for in
 /log exercise spin → exercise = spin.
 /log minutes 45    → +45 exercise min → 45 today.
 /log steps 8400    → +8400 steps → 8400 today.
+/log meals yes     → skipped meals = yes.
+/log alcohol 1     → +1 unit alcohol → 1 today.   (additive)
 ```
 
 A few things to know:
 
-- **Cumulative things add up:** water, steps, desk hours, couch/bed hours, exercise minutes. So you can `/log water 32` at lunch and `/log water 16` at dinner, and the bot keeps a running total for the day.
+- **Cumulative things add up:** water, steps, desk hours, exercise minutes, alcohol. So you can `/log water 32` at lunch and `/log water 16` at dinner, and the bot keeps a running total for the day.
 - **Everything else replaces** the previous value (mood, sleep, pain ratings, etc.) — there's only one current answer to those.
 - **`/log migraine no` resets severity to 0** so you don't have to remember a second command.
-- **You can use shorthand:** `water`, `mood`, `sleep`, `desk`, `couch`, `shoulder`, `neck`, `migraine`, `severity`, `exercise`, `minutes`, `steps`, `notes`/`body`. The full names work too.
+- **You can use shorthand:** `water`, `mood`, `sleep`, `desk`, `shoulder`, `neck`, `migraine`, `severity`, `exercise`, `minutes`, `steps`, `notes`/`body`, `meals`, `alcohol`. The full names work too.
 
 ### Fix something you logged earlier
 
 You don't need a special command for this. Just send a normal message that mentions the day and what changed:
 
-> *"Hi June, update yesterday's water — I drank 64oz, not 45oz."*
+> *"Hey, update yesterday's water — I drank 64oz, not 45oz."*
 
 The bot recognizes that as an edit (rather than a new check-in), figures out the date and the change, and replies with a confirmation card and **`Yes ✓` / `No ✗` buttons**:
 
