@@ -2,137 +2,192 @@
 
 ## Context
 
-Currently the bot asks the user to manually log `steps` and `sleep_hours` every check-in even though my Garmin watch already has that data. This plan auto-pulls those from Garmin and adds two new Garmin-derived fields (`stress_score`, `move_minutes`) that are hard to capture any other way.
+Currently the bot asks for `steps`, `sleep_hours`, and `move_minutes` manually even though the Garmin watch already has that data. This plan auto-pulls those from Garmin into a dedicated `movement` sheet tab, with per-field fallback: if Garmin fails to populate a field, the user is asked about it in the normal check-in flow. `stress_score` is Garmin-only — no fallback, since users can't self-report HRV stress.
 
-Garmin's official APIs (Health API, Connect IQ Wellness) require commercial registration with a real product behind it — not viable for personal use. So this plan uses the **community `garth` library**, which reverse-engineers the same web/mobile endpoints the Garmin Connect website uses. Trade-off: Garmin can break the library when they update their internal API (1–2x/year), and the maintainers usually patch within days.
+Garmin's official APIs require commercial registration. This plan uses the community `garth` library, which reverse-engineers the same endpoints the Garmin Connect website uses. Trade-off: Garmin can break it 1–2x/year; maintainers usually patch within days.
 
 ## Decisions locked in
 
-- **Library:** `garth>=0.4`
-- **Fields auto-populated from Garmin:**
-  - `steps` (existing field, replaces manual entry)
-  - `sleep_hours` (existing field, replaces manual entry)
-  - `stress_score` (new — Garmin's daily 0–100 score from HRV; big migraine-correlation input)
-  - `move_minutes` (new — Garmin "Intensity Minutes": moderate + 2× vigorous; distinct from `exercise_minutes` which stays as user-logged sessions)
+- **Library:** `garminconnect>=0.3` (`python-garminconnect` by cyberjunky — actively maintained, OAuth 2.0 SSO, no browser required)
+- **Sheet tab:** `movement` — all Garmin fields land here, not `checkins`
+- **Fields with user fallback** (Garmin pre-fills; user is asked if Garmin fails):
+  - `sleep_hours` — morning check-in
+  - `steps` — evening check-in
+  - `move_minutes` — evening check-in; Garmin Intensity Minutes (all movement, not just sessions)
+- **Field without fallback** (Garmin-only; users can't self-report):
+  - `stress_score` — Garmin's daily 0–100 HRV stress score; stays blank if Garmin fails
+- **Staying in `checkins`:** `exercise_type` and `exercise_minutes` — user-logged session data ("45 min spin") that Garmin's intensity minutes don't replace
 - **Not tracking:** body battery
-- **Optional follow-ups (easy to add later):** `resting_hr`, `hrv_overnight`
-- **Auth strategy:** laptop-first interactive auth, then SCP session tokens to the VM
-- **Failure mode:** on Garmin fetch error, fall back to asking the user the question (current behavior preserved)
+- **Optional follow-ups:** `resting_hr`, `hrv_overnight` — easy to add to the same fetch later
+- **Auth:** laptop-first interactive auth, SCP session tokens to the VM
+- **Failure mode:** per-field. If Garmin fails to return a specific field, that field is absent from the pre-fill, so the check-in asks about it as normal.
+
+## Sheet tab: `movement`
+
+```
+local_date | sleep_hours | steps | stress_score | move_minutes
+```
+
+Create this tab in the Google Sheet before deploying. Header row is in `docs/sheet_header.txt`.
 
 ## Behavior
 
-### Fetch points
+### Fetch schedule
 
-The scheduler triggers two fetches per day, piggybacking on existing slots:
+- **Morning slot (9 AM):** fetch last night's `sleep_hours` + 24h avg `stress_score` → write to today's `movement` row AND pre-load into the conversation's `partial_fields`.
+- **Evening slot (7 PM):** fetch today's `steps` + `move_minutes` + updated `stress_score` → same.
 
-- **Morning slot fire (9 AM):** before sending the opener, fetch last night's sleep + last 24h avg stress. Populate today's row.
-- **Evening slot fire (7 PM):** before sending the opener, fetch today's steps + today's move_minutes + today's stress. The existing "skip if already logged" logic kicks in for any field already populated.
+Runs before the slot opener is sent. Fields that Garmin returns are pre-loaded so Gemini never asks about them. Fields Garmin doesn't return are absent from `partial_fields`, so Gemini asks as normal.
 
-If a Garmin call fails (auth, network, rate limit), we log it, alert via Telegram (see *Token expiry* below), and proceed to the existing flow that asks the user.
+### Per-field fallback architecture
 
-### Skip-asking when Garmin already populated
+The scheduler calls `state.start(chat_id, slot, prefilled=garmin_data)`. `ConversationState` gets an optional `prefilled_fields` dict that is merged into `partial_fields` before the first turn. This means:
 
-The evening required-fields list shrinks dynamically: any field auto-populated by the morning/evening fetch is removed from the "still need" bullet list Gemini emits. Practical effect: the user sees fewer questions on days with healthy Garmin data; the conversational flow asks for steps/sleep only when Garmin couldn't deliver.
+- `REQUIRED_FIELDS_MORNING` keeps `sleep_hours`
+- `REQUIRED_FIELDS_EVENING` keeps `steps` and adds `move_minutes`
+- When Garmin returns a field → it's in `partial_fields` → Gemini skips it
+- When Garmin fails a field → it's absent → Gemini asks
+- When Garmin is entirely down → all three fields are absent → Gemini asks all three, same as today
+
+`stress_score` is never in `REQUIRED_FIELDS` — it's written silently if Garmin returns it, ignored if not.
+
+### Commit routing
+
+`_commit()` in `telegram_handlers.py` currently writes everything to `checkins`. After this change it splits by tab:
+
+```python
+movement_cols = set(sheets.COLUMNS["movement"])
+checkins_fields = {k: v for k, v in fields.items() if k not in movement_cols}
+movement_fields = {k: v for k, v in fields.items() if k in movement_cols and v is not None}
+
+await sheets.upsert_row(today, checkins_fields)
+if movement_fields:
+    await sheets.upsert_row(today, movement_fields, tab="movement")
+```
+
+`sleep_hours`, `steps`, and `move_minutes` are removed from `COLUMNS["checkins"]` — they no longer appear in the `checkins` tab at all.
+
+### `/log` overrides
+
+`/log sleep 7.5`, `/log steps 8400`, `/log move 45` still work. These need to write to the `movement` tab instead of `checkins`. Add a `LOG_FIELD_TAB` mapping in `telegram_handlers.py` that overrides the default tab for specific fields.
 
 ### Token expiry / re-auth
 
-`garth` refresh tokens last ~1 year. When auth fails:
-1. Bot catches the exception in `garmin.py`.
-2. Logs an error with `journalctl`.
-3. Pings the bot-heartbeat healthchecks URL with `/fail`.
-4. Sends a Telegram message to the allowed chat: *"Garmin auth expired. Re-run `scripts/garmin_login.py` on your laptop and SCP `garth_session/` to the VM."*
-5. Continues operating with manual-fallback logging until the user re-auths.
+On `GarminAuthError`:
+1. Scheduler catches it, logs to journald.
+2. Pings healthchecks heartbeat-fail URL.
+3. Sends Telegram message: *"Garmin auth expired — re-run `scripts/garmin_login.py` on your laptop and SCP `garth_session/` to the VM."*
+4. Bot proceeds as if Garmin returned nothing — all three fallback fields get asked in the check-in.
+
+`garth` refresh tokens last ~1 year.
 
 ## File-by-file changes
 
 ### New: `src/garmin.py`
-- `_client_lazy()` — initializes garth from `GARMIN_SESSION_DIR` on first call; reuses thereafter.
-- `async fetch_morning_data() -> dict` — returns `{"sleep_hours": float, "stress_score": int}`. Pulls last night's sleep + 24h stress.
-- `async fetch_evening_data() -> dict` — returns `{"steps": int, "move_minutes": int, "stress_score": int}`. Today's data.
-- All fetches wrap garth calls in `asyncio.to_thread`. Errors logged + re-raised so caller can fall back.
-- One `GarminAuthError` custom exception so the alert path is targeted.
+- `_client_lazy()` — initializes garth from `GARMIN_SESSION_DIR` on first call.
+- `async fetch_morning_data() -> dict` — returns subset of `{"sleep_hours": float, "stress_score": int}`. Only includes keys that were successfully fetched.
+- `async fetch_evening_data() -> dict` — returns subset of `{"steps": int, "move_minutes": int, "stress_score": int}`.
+- Returns partial dicts on partial failure (e.g. stress fails but steps succeeds → `{"steps": 8200}`).
+- `class GarminAuthError(Exception)` — raised only on auth failure so the alert path doesn't fire on transient errors.
 
 ### New: `scripts/garmin_login.py`
-Standalone CLI for the laptop. Prompts for username, password, MFA code (sent to email by garth). Uses `garth.login()` then `garth.save(GARMIN_SESSION_DIR)`. Prints next-step SCP command.
+Standalone CLI for the laptop. Prompts for username, password, MFA code. Calls `garth.login()` then `garth.save(GARMIN_SESSION_DIR)`. Prints the SCP command.
+
+### `src/state.py`
+- Add optional `prefilled_fields: dict` param to `state.start()`.
+- On start, merge `prefilled_fields` into `s.partial_fields` before saving.
 
 ### `src/sheets.py`
-- Add columns: `stress_score`, `move_minutes` to `COLUMN_ORDER`.
-- (Optional later: `resting_hr`, `hrv_overnight`.)
+- Remove `sleep_hours`, `steps` from `COLUMNS["checkins"]` (already in `movement`).
+- `move_minutes` is already only in `movement`.
 
-### `src/scheduler.py`
-- In `_start_slot_factory`, before the existing `_slot_already_logged` check:
-  - Try the appropriate Garmin fetch (`fetch_morning_data` for morning slot, `fetch_evening_data` for evening).
-  - On success, call `sheets.upsert_row(today, fetched_dict)` to populate today's row.
-  - On failure (any exception), log + alert + proceed.
+### `src/prompts.py`
+- `move_minutes` already added to `Fields` and field guidance.
+- Add `move_minutes` to `REQUIRED_FIELDS_EVENING`.
+- Remove `sleep_hours` from `REQUIRED_FIELDS_MORNING` (it stays in `Fields` for Gemini to parse if the user mentions it).
+- Remove `steps` from `REQUIRED_FIELDS_EVENING`.
+- Update slot opener and SYSTEM_PROMPT to not mention steps/sleep as things to cover.
 
 ### `src/telegram_handlers.py`
-- In the evening check-in flow, the existing missing-fields bullet logic already drops fields with values. No code changes needed if the row is already populated by the time the user replies.
-- Optional polish: the slot opener can briefly mention auto-pulled data — *"Garmin says 11,200 steps and 6h 40m sleep. What else?"* — but skip that for v1, just let the bot quietly know the answers.
+- `_slot_fields()`: remove `sleep_hours`, `steps` from the returned dict. Add `move_minutes`.
+- `_commit()`: split fields across `checkins` and `movement` tabs (see routing logic above).
+- Add `LOG_FIELD_TAB: dict[str, str]` mapping fields that write to non-default tabs:
+  ```python
+  LOG_FIELD_TAB = {"sleep_hours": "movement", "steps": "movement", "move_minutes": "movement"}
+  ```
+- Update `/log` command to use `LOG_FIELD_TAB` when calling `sheets.upsert_row`.
+- Remove `sleep_hours` and `steps` from `_TODAY_DISPLAY_ORDER` in `checkins` view (or read from `movement` row — TBD).
+
+### `src/scheduler.py`
+- In `_start_slot_factory`, after the existing `_slot_already_logged` check:
+  - If `GARMIN_ENABLED`: try the appropriate fetch.
+  - On success: `await sheets.upsert_row(today, data, tab="movement")` + pass `prefilled=data` to `state.start()`.
+  - On `GarminAuthError`: call `monitoring.garmin_auth_failed()`.
+  - On any other exception: log and proceed with no prefill.
+
+### `src/analytics.py`
+- `streak_summary()` reads `sleep_hours` and `steps` from the `movement` tab instead of `checkins`.
+- Merge by `local_date` before running streak logic:
+  ```python
+  movement_rows = await sheets.fetch_all_rows(tab="movement")
+  movement_by_date = {r["local_date"]: r for r in movement_rows}
+  # merge into checkins rows for streak computation
+  ```
 
 ### `src/monitoring.py`
-- Add `garmin_auth_failed()` helper that pings the heartbeat-fail URL and sends a Telegram message via the bot.
+- Add `async garmin_auth_failed(bot)` — pings healthchecks fail URL and sends Telegram message.
 
 ### `src/config.py`
-- Add `GARMIN_SESSION_DIR = os.environ.get("GARMIN_SESSION_DIR", "./garth_session")`.
+- Add `GARMIN_SESSION_DIR`.
+- Add `GARMIN_ENABLED` (default `false`).
 
 ### `pyproject.toml`
 - Add `garth>=0.4`.
 
 ### `.env.example`
-- `GARMIN_SESSION_DIR=/opt/checkin/garth_session`
+- Add `GARMIN_ENABLED=false` and `GARMIN_SESSION_DIR=/opt/checkin/garth_session`.
 
-### `docs/sheet_header.txt`
-- Append new columns to the header row.
-
-### `docs/USER_GUIDE.md`
-- New section under "Nudges" or "The daily rhythm": brief note that steps/sleep/stress come from Garmin automatically; manual `/log steps` still works as override.
-
-## Auth flow detail
+## Auth flow
 
 ```
 [laptop, one-time]
+  $ pip install "garth>=0.4"
   $ python scripts/garmin_login.py
-  Username: thalakottur.m@northeastern.edu
-  Password: ********
-  MFA code (check email): 123456
   ✓ Saved session to ./garth_session/
-  Next: gcloud compute scp --recurse ./garth_session checkin-bot:/opt/checkin/ --zone=us-east1-b
-
-[laptop]
-  $ gcloud compute scp --recurse ./garth_session checkin-bot:/opt/checkin/ --zone=us-east1-b
+  Next: gcloud compute scp --recurse ./garth_session checkin-bot:/opt/checkin/ --zone=...
 
 [VM]
   $ chmod 700 /opt/checkin/garth_session
+  # Add GARMIN_ENABLED=true and GARMIN_SESSION_DIR=/opt/checkin/garth_session to .env
   $ sudo systemctl restart checkin-bot
-  $ journalctl -u checkin-bot -n 30  # watch the boot logs to confirm
 ```
 
-The session directory contains pickled cookies + tokens. **Treat it like `.env` and `gsa-key.json`** — gitignore, `chmod 600`, never commit.
+Treat `garth_session/` like `.env` — gitignore, `chmod 700`, never commit.
 
 ## Build order
 
-1. **Local prep** — install `garth`, run `scripts/garmin_login.py` on the laptop, confirm a session is saved.
-2. **`src/garmin.py` happy path** — write `fetch_morning_data` against the real account, run it locally with the saved session, confirm the values match what the Garmin Connect app shows.
-3. **Schema additions** — add `stress_score`, `move_minutes` to `COLUMN_ORDER`, update sheet header.
-4. **Wire into scheduler** — call from morning slot, populate row, confirm via `/today` after a manual trigger.
-5. **Add evening fetch** — same pattern.
-6. **Failure handling** — kill the network on the VM briefly, confirm graceful fallback + Telegram alert.
-7. **Token expiry rehearsal** — manually delete the session on the VM, observe the alert path fires correctly.
-8. **Deploy + monitor for a week.** Field-mapping bugs will surface in the first few days.
-
-Realistic effort: **1–2 days of focused work** end-to-end. The trickiest parts are auth and field-mapping (figuring out which garth endpoint returns what shape; sleep especially has multiple "sleep" objects to choose from).
+1. **Auth + data validation** — install garth, write `scripts/garmin_login.py`, save session, write a throwaway script to print raw responses for sleep/stress/steps endpoints. Nail down field names before writing any bot code. Sleep especially has multiple objects in the response.
+2. **`src/garmin.py`** — both fetch functions, partial-dict return on partial failure, `GarminAuthError`.
+3. **`src/state.py`** — add `prefilled_fields` to `state.start()`.
+4. **Schema changes** — remove `sleep_hours`/`steps` from `COLUMNS["checkins"]`, create `movement` tab in the sheet, update `REQUIRED_FIELDS_EVENING` to add `move_minutes`, remove `steps`.
+5. **Wire morning fetch into scheduler** — prefill + sheet write, confirm via `/today`.
+6. **Wire evening fetch** — same.
+7. **`_commit()` routing** — split fields across tabs.
+8. **`/log` tab routing** — `LOG_FIELD_TAB` overrides.
+9. **Fix analytics** — read sleep/steps from `movement`.
+10. **Failure handling** — delete session on VM, confirm `GarminAuthError` fires alert and all three fallback fields get asked.
+11. **Deploy + monitor for a week.**
 
 ## Risks
 
-- **Garmin breaks the library.** Mitigation: pin to a known-good `garth` version; check release notes before upgrading.
-- **MFA stored in the session.** If your Garmin password rotates or you log in elsewhere causing forced re-auth, the session invalidates. Manual re-auth required (alert flow handles this).
-- **Field-name drift.** Stress score might be `overall_stress_level` or `avg_stress_level` depending on the endpoint and watch model. First few weeks of build will involve some `print(response_json)` archaeology.
-- **Sleep data is for "last night" not "today."** Map carefully — `fetch_morning_data` should ask for the previous night's sleep summary, which Garmin keys by date as the wake-up date.
-- **Rate limits exist but are loose.** Two fetches/day is well under any threshold. Don't poll aggressively.
+- **Field-name drift.** Stress score key varies by watch model. Expect archaeology in step 1.
+- **Sleep date mapping.** Morning fetch asks for previous night's sleep, keyed by wake-up date (today).
+- **Partial Garmin failure is now the common case.** The `fetch_*` functions must return partial dicts cleanly rather than raising on individual field failures. Test this path explicitly.
+- **Garmin breaks garth.** Pin to a known-good version.
+- **Rate limits.** Two fetches/day is well under any threshold.
 
-## Out of scope (deferred)
+## Out of scope
 
-- `resting_hr`, `hrv_overnight` — easy to add to the same fetch later when wanted.
-- Body battery — explicitly excluded.
-- Phone screen time — separate project (Android sidecar app).
-- Laptop screen time — separate (RescueTime / ActivityWatch); independent of Garmin work.
+- `resting_hr`, `hrv_overnight` — add to `movement` later.
+- Body battery — excluded.
+- Cross-day correlation analytics (`/migraine` deepening) — separate item, builds on top of this.

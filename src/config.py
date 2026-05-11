@@ -48,7 +48,7 @@ TIMEZONE = os.environ.get("TIMEZONE", "America/New_York")
 MAX_TURNS = _int("MAX_TURNS", 8)
 
 # Habit goals — overridable via env vars.
-WATER_GOAL_OZ = _float("WATER_GOAL_OZ", 60.0)
+WATER_GOAL_OZ = _float("WATER_GOAL_OZ", 96.0)
 SLEEP_GOAL_HOURS = _float("SLEEP_GOAL_HOURS", 7.0)
 STEPS_GOAL = _int("STEPS_GOAL", 10000)
 EXERCISE_WEEKLY_GOAL_MIN = _float("EXERCISE_WEEKLY_GOAL_MIN", 150.0)

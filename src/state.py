@@ -93,16 +93,20 @@ def clear(chat_id: int) -> None:
             f.unlink()
 
 
-def start(chat_id: int, slot: str) -> ConversationState:
+def start(chat_id: int, slot: str, prefilled: dict | None = None) -> ConversationState:
     clear(chat_id)
-    state = ConversationState(
+    s = ConversationState(
         chat_id=chat_id,
         slot=slot,
         started_at=now_utc().isoformat(timespec="seconds"),
         mode="checkin",
     )
-    save(state)
-    return state
+    if prefilled:
+        for k, v in prefilled.items():
+            if v is not None:
+                s.partial_fields[k] = v
+    save(s)
+    return s
 
 
 def start_update(chat_id: int) -> ConversationState:

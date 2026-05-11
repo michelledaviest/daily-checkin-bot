@@ -1,6 +1,8 @@
 .env
 gsa-key.json
 *.json.key
+garth_session/
+garmin_tokens/
 
 __pycache__/
 *.pyc
@@ -21,3 +23,4 @@ state/
 # Personal scratch
 TODO.md
 deploy-vm.sh
+ssh-vm.sh

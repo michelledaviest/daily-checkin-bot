@@ -58,23 +58,32 @@ def _build_contents(state: ConversationState) -> list[types.Content]:
     return contents
 
 
-def _slot_context_prefix(slot: str) -> str:
-    fields = ", ".join(required_fields(slot))
-    return (
-        f"\n\nCurrent slot: {slot}.\n"
-        f"Required fields for this slot: {fields}.\n"
-        f"Use these and only these as the completeness check."
-    )
+def _slot_context_prefix(slot: str, prefilled: dict | None = None) -> str:
+    all_required = required_fields(slot)
+    prefilled = prefilled or {}
+    remaining = [f for f in all_required if prefilled.get(f) is None]
+    lines = [
+        f"\n\nCurrent slot: {slot}.",
+        f"Required fields for this slot: {', '.join(remaining) if remaining else 'none'}.",
+        "Use these and only these as the completeness check.",
+    ]
+    already = {k: v for k, v in prefilled.items() if k in all_required and v is not None}
+    if already:
+        summary = ", ".join(f"{k}={v}" for k, v in already.items())
+        lines.append(f"Already logged today — do NOT ask about these: {summary}.")
+    return "\n".join(lines)
 
 
-def _system_instruction(slot: str) -> str:
-    return SYSTEM_PROMPT + _slot_context_prefix(slot)
+def _system_instruction(slot: str, prefilled: dict | None = None) -> str:
+    return SYSTEM_PROMPT + _slot_context_prefix(slot, prefilled)
 
 
 def _generate_sync(state: ConversationState) -> CheckinResponse:
     contents = _build_contents(state)
     config = types.GenerateContentConfig(
-        system_instruction=_system_instruction(state.slot),
+        system_instruction=_system_instruction(
+            state.slot, state.partial_fields or None
+        ),
         response_mime_type="application/json",
         response_schema=CheckinResponse,
         temperature=0.3,

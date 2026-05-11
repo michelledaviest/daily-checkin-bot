@@ -49,6 +49,13 @@ COLUMNS: dict[str, list[str]] = {
         "barometric_pressure_mb",
         "pressure_drop_24h_mb",
     ],
+    "movement": [
+        "local_date",
+        "sleep_hours",
+        "steps",
+        "stress_score",
+        "move_minutes",
+    ],
 }
 
 # Aliases kept for callers that reference the checkins layout directly.
@@ -128,7 +135,7 @@ def _upsert_sync(local_date: str, fields: dict, tab: str) -> None:
                         new_row.append(f"'{local_date}")
                     else:
                         new_row.append(_format_cell(fields.get(col)))
-                ws.append_row(new_row, value_input_option="USER_ENTERED")
+                ws.append_row(new_row, value_input_option="USER_ENTERED", table_range="A1")
             else:
                 updates = []
                 for col_name, value in fields.items():

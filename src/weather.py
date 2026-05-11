@@ -33,7 +33,7 @@ def _fetch_pressure_sync() -> tuple[float | None, float | None]:
         "past_days": 1,
         "forecast_days": 1,
     }
-    r = requests.get(_OPEN_METEO_URL, params=params, timeout=10)
+    r = requests.get(_OPEN_METEO_URL, params=params, timeout=30)
     r.raise_for_status()
     data = r.json()
 

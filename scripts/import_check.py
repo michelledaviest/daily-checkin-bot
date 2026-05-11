@@ -6,7 +6,12 @@ own module wiring without installing the world. Run from the repo root:
 import os
 import sys
 import types
+import warnings
 from pathlib import Path
+
+# Suppress logfire pydantic plugin warnings — it tries to import requests
+# submodules that don't exist in our stub, but it doesn't affect our code.
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -102,7 +107,13 @@ stub("google.oauth2.service_account", Credentials=_Creds)
 
 
 # ---- requests
-stub("requests", get=lambda *a, **k: None, RequestException=Exception)
+class _Response:
+    status_code = 200
+    def raise_for_status(self): pass
+    def json(self): return {}
+
+stub("requests", get=lambda *a, **k: _Response(), RequestException=Exception,
+     Response=_Response, Session=type("Session", (), {}))
 
 
 # ---- apscheduler

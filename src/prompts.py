@@ -39,6 +39,7 @@ Field guidance:
 - steps: total step count for the day (integer). Ask for a rough number if the user is vague.
 - skipped_meals: true if any meal was skipped today, else false. A top migraine trigger.
 - alcohol: number of standard drink units consumed today (0 if none). One decimal allowed.
+- move_minutes: total active/intensity minutes today from all movement (not just structured exercise). Integer.
 
 When the user's answer is vague (e.g. "some water"), ask for a number. When they say "a lot" or "a little" for hours, ask for a rough number.
 
@@ -73,6 +74,7 @@ class Fields(BaseModel):
     steps: Optional[int] = None
     skipped_meals: Optional[bool] = None
     alcohol: Optional[float] = None
+    move_minutes: Optional[float] = None
     raw_transcript_delta: str = Field(
         default="",
         description="Faithful transcript of the user's words from THIS turn only.",

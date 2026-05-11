@@ -7,6 +7,9 @@ local_date	laptop_screen_hours	phone_screen_hours	laptop_longest_focus_block_min
 # Tab: environment  (auto-pulled by weather.py / future Garmin + Google Fit)
 local_date	barometric_pressure_mb	pressure_drop_24h_mb
 
+# Tab: movement  (auto-pulled from Garmin — sleep, steps, stress, intensity minutes)
+local_date	sleep_hours	steps	stress_score	move_minutes
+
 # Tab: migraine_episodes  (future — per-episode detail, multiple rows per day)
 timestamp	local_date	severity	sleep_night_before	screen_heavy_day	caffeine_amount	hormonal	eye_strain	notes
 

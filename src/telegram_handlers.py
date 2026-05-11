@@ -392,12 +392,6 @@ async def cmd_log(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if field == "water_oz":
-        try:
-            hydration.set_last_log_now()
-        except Exception:
-            log.exception("set_last_log_now failed; ignoring")
-
     # Build reply.
     label, unit = next(
         ((l, s) for c, l, s in _TODAY_DISPLAY_ORDER if c == field),

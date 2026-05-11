@@ -44,7 +44,17 @@ def _start_slot_factory(bot: Bot, slot: str):
         if await _slot_already_logged(slot):
             log.info("Skipping %s nudge: already logged today.", slot)
             return
-        state.start(chat_id, slot)
+        prefilled: dict = {}
+        if slot == "evening":
+            try:
+                today_row = await sheets.fetch_row_by_date(local_date_str())
+                if today_row:
+                    raw = today_row.get("water_oz")
+                    if raw is not None and str(raw).strip():
+                        prefilled["water_oz"] = float(raw)
+            except Exception:
+                log.exception("Failed to prefetch water_oz for evening slot")
+        state.start(chat_id, slot, prefilled=prefilled or None)
         try:
             await bot.send_message(chat_id, slot_opener(slot))
         except Exception:
